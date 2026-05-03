@@ -256,7 +256,7 @@ const map = L.map("map", {
   zoomControl: true,
   attributionControl: false,
   preferCanvas: true,
-}).setView([38.8895, -77.0353], 16);
+}).setView([37.7955, -122.3937], 17);  // SF Ferry Building
 
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -283,7 +283,7 @@ const droneIcon = L.divIcon({
       </svg>
     </div>`,
 });
-const drone = L.marker([38.8895, -77.0353], { icon: droneIcon, zIndexOffset: 1000 }).addTo(map);
+const drone = L.marker([37.7955, -122.3937], { icon: droneIcon, zIndexOffset: 1000 }).addTo(map);
 
 let follow = true;
 $("btn-follow").addEventListener("click", () => {
@@ -322,8 +322,6 @@ function useMyLocation() {
   );
 }
 $("btn-loc").addEventListener("click", useMyLocation);
-// Try once on load — if denied, the demo just stays at the default origin.
-useMyLocation();
 
 function updateMap(t) {
   const ll = [t.lat, t.lon];

@@ -34,7 +34,7 @@ class MockTelemetry:
     """Drives a battery curve and attitude that the FSM can react to."""
 
     def __init__(self):
-        self._origin = (38.8895, -77.0353)
+        self._origin = (37.7955, -122.3937)  # SF Ferry Building
         self._t = Telemetry(mode="MOCK", armed=True, battery_pct=42.0,
                             voltage_v=22.6, current_a=9.4, alt_m=18.0,
                             lat=self._origin[0], lon=self._origin[1], link="up")
