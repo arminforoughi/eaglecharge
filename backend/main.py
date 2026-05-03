@@ -22,7 +22,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 from .detector import Detection, PowerlineDetector
 from .mock_video import MockVideo
@@ -132,6 +133,17 @@ async def telemetry_ws(ws: WebSocket):
             await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         return
+
+
+class Origin(BaseModel):
+    lat: float
+    lon: float
+
+
+@app.post("/origin")
+def set_origin(o: Origin):
+    telemetry.set_origin(o.lat, o.lon)
+    return JSONResponse({"ok": True, "lat": o.lat, "lon": o.lon})
 
 
 @app.get("/")

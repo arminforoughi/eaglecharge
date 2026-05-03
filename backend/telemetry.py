@@ -34,13 +34,18 @@ class MockTelemetry:
     """Drives a battery curve and attitude that the FSM can react to."""
 
     def __init__(self):
+        self._origin = (38.8895, -77.0353)
         self._t = Telemetry(mode="MOCK", armed=True, battery_pct=42.0,
                             voltage_v=22.6, current_a=9.4, alt_m=18.0,
-                            lat=38.8895, lon=-77.0353, link="up")
+                            lat=self._origin[0], lon=self._origin[1], link="up")
         self._lock = threading.Lock()
         self._charging = False
         self._t0 = time.time()
         threading.Thread(target=self._run, daemon=True).start()
+
+    def set_origin(self, lat: float, lon: float):
+        with self._lock:
+            self._origin = (float(lat), float(lon))
 
     def _run(self):
         while True:
@@ -58,10 +63,11 @@ class MockTelemetry:
                     t.voltage_v = 22.0 + 0.3 * math.sin(phase * 0.2)
                 t.roll_deg = 4.0 * math.sin(phase * 0.7)
                 t.pitch_deg = 2.5 * math.sin(phase * 0.5 + 1.0)
-                # Slow circular drift so the map shows a visible trail.
+                # Slow circular drift around the operator-set origin.
                 w = phase * 0.05
-                t.lat = 38.8895 + 0.0009 * math.sin(w)
-                t.lon = -77.0353 + 0.0011 * math.cos(w)
+                lat0, lon0 = self._origin
+                t.lat = lat0 + 0.0009 * math.sin(w)
+                t.lon = lon0 + 0.0011 * math.cos(w)
                 t.yaw_deg = (math.degrees(w) + 90) % 360 - 180
                 t.alt_m = 18.0 + 0.6 * math.sin(phase * 0.3)
             time.sleep(0.1)
@@ -128,6 +134,10 @@ class MavlinkTelemetry:
         # Stubbed here — the user wires it to their hardware.
         with self._lock:
             self._charging = charging
+
+    def set_origin(self, lat: float, lon: float):
+        # Live GPS comes from the autopilot; nothing to do.
+        pass
 
     def snapshot(self) -> Telemetry:
         with self._lock:
