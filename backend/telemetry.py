@@ -58,7 +58,11 @@ class MockTelemetry:
                     t.voltage_v = 22.0 + 0.3 * math.sin(phase * 0.2)
                 t.roll_deg = 4.0 * math.sin(phase * 0.7)
                 t.pitch_deg = 2.5 * math.sin(phase * 0.5 + 1.0)
-                t.yaw_deg = (phase * 8.0) % 360 - 180
+                # Slow circular drift so the map shows a visible trail.
+                w = phase * 0.05
+                t.lat = 38.8895 + 0.0009 * math.sin(w)
+                t.lon = -77.0353 + 0.0011 * math.cos(w)
+                t.yaw_deg = (math.degrees(w) + 90) % 360 - 180
                 t.alt_m = 18.0 + 0.6 * math.sin(phase * 0.3)
             time.sleep(0.1)
 

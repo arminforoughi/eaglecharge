@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <title>EAGLE — Perch & Charge GCS</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
   :root {
     --bg: #0a0e10;
@@ -31,7 +35,8 @@
   header .pill.warn { background: #2a1410; color: var(--warn); border-color: #5b1a1a; }
 
   main { background: var(--panel); display: grid;
-    grid-template-rows: 1fr 220px; gap: 1px; background: var(--line); }
+    grid-template-rows: 1fr 1fr 200px; gap: 1px; background: var(--line); min-height: 0; }
+  main > * { min-height: 0; }
   #video-wrap { background: #000; position: relative; overflow: hidden; }
   #video-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
   #video-wrap .corner { position: absolute; color: var(--acc); font-size: 11px;
@@ -40,6 +45,42 @@
   #video-wrap .tr { top: 8px; right: 12px; }
   #video-wrap .bl { bottom: 8px; left: 12px; }
   #video-wrap .br { bottom: 8px; right: 12px; color: var(--acc-2); }
+
+  #map-wrap { background: #07111a; position: relative; }
+  #map { width: 100%; height: 100%; background: #07111a; filter: brightness(0.85) contrast(1.05); }
+  .leaflet-container { background: #07111a !important; font-family: inherit; }
+  #map-wrap .corner { position: absolute; color: var(--acc); font-size: 11px;
+    letter-spacing: 1px; z-index: 500; pointer-events: none;
+    text-shadow: 0 0 4px #000, 0 0 4px #000; }
+  #map-wrap .tl { top: 8px; left: 12px; }
+  #map-wrap .tr { top: 8px; right: 60px; }
+  #map-wrap .bl { bottom: 8px; left: 12px; color: var(--dim); font-size: 10px; }
+  .map-btn { position: absolute; z-index: 600; background: var(--panel-2);
+    border: 1px solid var(--line); color: var(--fg); font-family: inherit;
+    font-size: 10px; letter-spacing: 1px; padding: 4px 8px; cursor: pointer; }
+  .map-btn:hover { border-color: var(--acc); color: var(--acc); }
+  .map-btn.on { color: var(--acc); border-color: var(--acc); }
+  #btn-follow { top: 8px; right: 8px; }
+  #btn-power { top: 36px; right: 8px; }
+
+  .drone-marker { pointer-events: none; }
+  .drone-marker .arrow {
+    width: 22px; height: 22px;
+    transform-origin: 50% 50%;
+    transition: transform .15s linear;
+  }
+  .drone-marker .arrow svg { display: block; }
+  .drone-marker .pulse {
+    position: absolute; left: 50%; top: 50%; width: 36px; height: 36px;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--acc); border-radius: 50%;
+    animation: pulse 1.4s ease-out infinite;
+    opacity: 0.7;
+  }
+  @keyframes pulse {
+    0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  }
 
   #timeline { background: var(--panel-2); padding: 10px 14px; }
   #timeline h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 2px;
@@ -56,7 +97,7 @@
     transform: translateY(-50%) rotate(45deg); z-index: 2; }
   .states .s:last-child .arrow { display: none; }
   #log { margin-top: 10px; background: #07111a; border: 1px solid var(--line);
-    height: 110px; overflow-y: auto; font-size: 11px; padding: 6px 8px; line-height: 1.5; }
+    height: 90px; overflow-y: auto; font-size: 11px; padding: 6px 8px; line-height: 1.5; }
   #log .ts { color: var(--dim); }
   #log .ev { color: var(--acc); }
 
@@ -110,6 +151,14 @@
       <div class="corner tr" id="cam-mode">VIDEO MOCK</div>
       <div class="corner bl">PWRLN-DET v0.1</div>
       <div class="corner br" id="state-overlay">SEARCH</div>
+    </div>
+    <div id="map-wrap">
+      <div id="map"></div>
+      <div class="corner tl">TACTICAL MAP · OSM + OPENINFRAMAP</div>
+      <div class="corner tr" id="map-coord">—</div>
+      <div class="corner bl">© OpenStreetMap · OpenInfraMap (CC-BY)</div>
+      <button class="map-btn on" id="btn-follow" title="follow drone">FOLLOW</button>
+      <button class="map-btn on" id="btn-power" title="powerline overlay">PWR</button>
     </div>
     <div id="timeline">
       <h3>MISSION STATE</h3>
@@ -200,6 +249,63 @@ const log = (msg) => {
 let frames = 0;
 setInterval(() => { $("fps").textContent = frames; frames = 0; }, 1000);
 
+// ---- Map ----------------------------------------------------------------
+const map = L.map("map", {
+  zoomControl: true,
+  attributionControl: false,
+  preferCanvas: true,
+}).setView([38.8895, -77.0353], 16);
+
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+}).addTo(map);
+
+const powerLayer = L.tileLayer("https://tiles.openinframap.org/power/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  opacity: 0.95,
+}).addTo(map);
+
+const trail = L.polyline([], { color: "#2ee59d", weight: 2, opacity: 0.85 }).addTo(map);
+const trailPoints = [];
+const TRAIL_MAX = 400;
+
+const droneIcon = L.divIcon({
+  className: "drone-marker",
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+  html: `
+    <div class="pulse"></div>
+    <div class="arrow">
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <polygon points="11,1 19,19 11,15 3,19" fill="#2ee59d" stroke="#0a0e10" stroke-width="1.2"/>
+      </svg>
+    </div>`,
+});
+const drone = L.marker([38.8895, -77.0353], { icon: droneIcon, zIndexOffset: 1000 }).addTo(map);
+
+let follow = true;
+$("btn-follow").addEventListener("click", () => {
+  follow = !follow;
+  $("btn-follow").classList.toggle("on", follow);
+});
+$("btn-power").addEventListener("click", () => {
+  if (map.hasLayer(powerLayer)) { map.removeLayer(powerLayer); $("btn-power").classList.remove("on"); }
+  else { powerLayer.addTo(map); $("btn-power").classList.add("on"); }
+});
+
+function updateMap(t) {
+  const ll = [t.lat, t.lon];
+  drone.setLatLng(ll);
+  const arrow = drone.getElement()?.querySelector(".arrow");
+  if (arrow) arrow.style.transform = `rotate(${t.yaw_deg}deg)`;
+  trailPoints.push(ll);
+  if (trailPoints.length > TRAIL_MAX) trailPoints.shift();
+  trail.setLatLngs(trailPoints);
+  if (follow) map.panTo(ll, { animate: true, duration: 0.2 });
+  $("map-coord").textContent = t.lat.toFixed(5) + ", " + t.lon.toFixed(5);
+}
+// -------------------------------------------------------------------------
+
 function setGauge(id, pct, lowMid) {
   const g = $(id);
   g.querySelector(".fill").style.width = Math.max(0, Math.min(100, pct)) + "%";
@@ -269,6 +375,9 @@ function connect() {
     $("yaw").textContent = t.yaw_deg.toFixed(1) + "°";
     $("alt").textContent = t.alt_m.toFixed(1) + " m";
     $("pos").textContent = t.lat.toFixed(5) + ", " + t.lon.toFixed(5);
+
+    // map
+    updateMap(t);
 
     // footer
     $("armed").textContent = t.armed ? "YES" : "NO";
